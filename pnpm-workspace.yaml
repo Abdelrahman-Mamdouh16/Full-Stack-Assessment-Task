@@ -1,0 +1,10 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+onlyBuiltDependencies:
+  - "@parcel/watcher"
+  - esbuild
+  - mongodb-memory-server
+  - sharp
+  - unrs-resolver
