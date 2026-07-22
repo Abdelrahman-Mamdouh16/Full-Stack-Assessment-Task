@@ -6,6 +6,10 @@ import { AuthModule } from './auth/auth.module';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { validateEnvironment } from './config/env.validation';
+import { OrganizationMembersModule } from './organization-members/organization-members.module';
+import { OrganizationsModule } from './organizations/organizations.module';
+import { ProjectMembersModule } from './project-members/project-members.module';
+import { ProjectsModule } from './projects/projects.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -24,6 +28,10 @@ import { UsersModule } from './users/users.module';
     }),
     AuthModule,
     UsersModule,
+    OrganizationsModule,
+    OrganizationMembersModule,
+    ProjectsModule,
+    ProjectMembersModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
