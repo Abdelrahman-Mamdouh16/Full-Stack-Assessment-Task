@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from './auth/auth.module';
+import { CommentsModule } from './comments/comments.module';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { validateEnvironment } from './config/env.validation';
@@ -34,6 +35,7 @@ import { UsersModule } from './users/users.module';
     ProjectsModule,
     ProjectMembersModule,
     TasksModule,
+    CommentsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
