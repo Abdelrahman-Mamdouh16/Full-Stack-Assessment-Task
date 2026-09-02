@@ -120,7 +120,8 @@ pnpm dev
 | `pnpm format`    | Prettier write                             |
 
 `pnpm test` does not need a running MongoDB — it starts a throwaway in-memory
-server for the duration of the run.
+server for the duration of the run. The first run downloads a MongoDB binary
+(around 100 MB) and caches it.
 
 ---
 
