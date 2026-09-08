@@ -11,7 +11,7 @@ async function bootstrap(): Promise<void> {
 
   app.use(helmet());
   app.enableCors({
-    origin: configService.get<string>('WEB_ORIGIN') ?? 'http://localhost:3000',
+    origin: configService.get<string>('WEB_ORIGIN') ?? 'http://localhost:3742',
     credentials: true,
   });
   app.useGlobalPipes(
@@ -23,7 +23,7 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
-  const port = configService.get<number>('API_PORT') ?? 4000;
+  const port = configService.get<number>('API_PORT') ?? 4732;
   await app.listen(port);
 
   new Logger('Bootstrap').log(`ProjectFlow API listening on http://localhost:${port}`);

@@ -22,7 +22,7 @@ export function validateEnvironment(config: Record<string, unknown>): AppEnviron
     );
   }
 
-  const port = Number(config.API_PORT ?? 4000);
+  const port = Number(config.API_PORT ?? 4732);
   if (!Number.isInteger(port) || port <= 0) {
     throw new Error('API_PORT must be a positive integer');
   }
@@ -33,6 +33,6 @@ export function validateEnvironment(config: Record<string, unknown>): AppEnviron
     JWT_SECRET: String(config.JWT_SECRET),
     JWT_EXPIRES_IN: String(config.JWT_EXPIRES_IN ?? '7d'),
     API_PORT: port,
-    WEB_ORIGIN: String(config.WEB_ORIGIN ?? 'http://localhost:3000'),
+    WEB_ORIGIN: String(config.WEB_ORIGIN ?? 'http://localhost:3742'),
   };
 }

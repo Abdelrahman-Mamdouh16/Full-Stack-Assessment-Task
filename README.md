@@ -63,9 +63,9 @@ cp .env.example .env
 | `MONGODB_URI`         | MongoDB connection string        | `mongodb://127.0.0.1:27017/projectflow` |
 | `JWT_SECRET`          | Signing secret for access tokens | — (required)                            |
 | `JWT_EXPIRES_IN`      | Access token lifetime            | `7d`                                    |
-| `API_PORT`            | Port the API listens on          | `4000`                                  |
-| `WEB_ORIGIN`          | Origin allowed by CORS           | `http://localhost:3000`                 |
-| `NEXT_PUBLIC_API_URL` | API base URL used by the browser | `http://localhost:4000`                 |
+| `API_PORT`            | Port the API listens on          | `4732`                                  |
+| `WEB_ORIGIN`          | Origin allowed by CORS           | `http://localhost:3742`                 |
+| `NEXT_PUBLIC_API_URL` | API base URL used by the browser | `http://localhost:4732`                 |
 
 The API refuses to boot if `MONGODB_URI` or `JWT_SECRET` is missing.
 
@@ -86,8 +86,19 @@ fresh organization, users, projects, tasks and comments.
 pnpm dev
 ```
 
-- Web — <http://localhost:3000>
-- API — <http://localhost:4000>
+- Web — <http://localhost:3742>
+- API — <http://localhost:4732>
+
+Both apps deliberately avoid the usual 3000/4000 defaults so they do not clash
+with other projects. To move the web app, set `WEB_PORT` in your shell and
+update `WEB_ORIGIN` in `.env` to match, so CORS keeps working:
+
+```bash
+WEB_PORT=3800 pnpm --filter @projectflow/web dev
+```
+
+The API port comes from `API_PORT` in `.env`; change `NEXT_PUBLIC_API_URL` to
+match if you move it.
 
 Run one at a time if you prefer:
 

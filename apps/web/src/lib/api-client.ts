@@ -1,7 +1,7 @@
 import type { ApiErrorBody } from '@projectflow/shared';
 import { getAccessToken } from './auth-storage';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4732';
 
 export class ApiError extends Error {
   readonly statusCode: number;

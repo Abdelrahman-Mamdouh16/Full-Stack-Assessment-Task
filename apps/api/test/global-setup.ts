@@ -10,5 +10,5 @@ export default async function globalSetup(): Promise<void> {
   process.env.MONGODB_URI = mongo.getUri('projectflow_test');
   process.env.JWT_SECRET = 'test-secret';
   process.env.JWT_EXPIRES_IN = '1h';
-  process.env.API_PORT = '4001';
+  process.env.API_PORT = '4733';
 }
