@@ -57,7 +57,10 @@ export class ProjectMembersService {
       .aggregate<{
         _id: Types.ObjectId;
         count: number;
-      }>([{ $match: { projectId: { $in: projectIds } } }, { $group: { _id: '$projectId', count: { $sum: 1 } } }])
+      }>([
+        { $match: { projectId: { $in: projectIds } } },
+        { $group: { _id: '$projectId', count: { $sum: 1 } } },
+      ])
       .exec();
     return new Map(rows.map((row) => [row._id.toString(), row.count]));
   }

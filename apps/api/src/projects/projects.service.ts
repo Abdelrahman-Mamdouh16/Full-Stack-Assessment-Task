@@ -187,7 +187,10 @@ export class ProjectsService {
         .aggregate<{
           _id: Types.ObjectId;
           count: number;
-        }>([{ $match: { projectId: { $in: projectIds } } }, { $group: { _id: '$projectId', count: { $sum: 1 } } }])
+        }>([
+          { $match: { projectId: { $in: projectIds } } },
+          { $group: { _id: '$projectId', count: { $sum: 1 } } },
+        ])
         .exec(),
     ]);
 

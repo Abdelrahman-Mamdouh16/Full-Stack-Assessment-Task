@@ -148,7 +148,10 @@ export class TasksService {
         .aggregate<{
           _id: Types.ObjectId;
           count: number;
-        }>([{ $match: { taskId: { $in: tasks.map((task) => task._id) } } }, { $group: { _id: '$taskId', count: { $sum: 1 } } }])
+        }>([
+          { $match: { taskId: { $in: tasks.map((task) => task._id) } } },
+          { $group: { _id: '$taskId', count: { $sum: 1 } } },
+        ])
         .exec(),
     ]);
 
