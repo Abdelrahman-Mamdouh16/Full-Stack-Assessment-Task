@@ -146,4 +146,19 @@ describe('Tasks', () => {
     expect(response.body.total).toBe(1);
     expect(response.body.items[0]).toMatchObject({ title: 'Work in flight' });
   });
+
+  it('refuses to update task status for someone outside the project', async () => {
+    const createResponse = await request(app.getHttpServer())
+      .post(`/projects/${projectId}/tasks`)
+      .set('Authorization', authHeader(member))
+      .send({ title: 'Task for status test' })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .patch(`/tasks/${createResponse.body.id}/status`)
+      .set('Authorization', authHeader(outsider))
+      .send({ status: TaskStatus.IN_PROGRESS })
+      .expect(403);
+  });
 });
+
