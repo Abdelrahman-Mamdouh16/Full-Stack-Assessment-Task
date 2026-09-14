@@ -43,24 +43,13 @@ describe('Task Assignment (Part 8)', () => {
     member2 = await registerUser(app, 'Sarah Member2', 'sarah@example.com');
     outsider = await registerUser(app, 'Outside User', 'outside@example.com');
 
-    const organizationId = await createOrganization(
-      connection,
-      'Acme Corp',
-      'acme-corp',
-      owner.id,
-    );
+    const organizationId = await createOrganization(connection, 'Acme Corp', 'acme-corp', owner.id);
     await addOrganizationMember(connection, organizationId, owner.id, OrganizationRole.OWNER);
     await addOrganizationMember(connection, organizationId, manager.id, OrganizationRole.MEMBER);
     await addOrganizationMember(connection, organizationId, member1.id, OrganizationRole.MEMBER);
     await addOrganizationMember(connection, organizationId, member2.id, OrganizationRole.MEMBER);
 
-    projectId = await createProject(
-      connection,
-      organizationId,
-      'Platform',
-      'PLAT',
-      owner.id,
-    );
+    projectId = await createProject(connection, organizationId, 'Platform', 'PLAT', owner.id);
 
     // Add manager and member1 to project; member2 is also added to project
     await addProjectMember(connection, projectId, manager.id, ProjectRole.PROJECT_MANAGER);
@@ -202,6 +191,74 @@ describe('Task Assignment (Part 8)', () => {
       .patch(`/tasks/${taskId}/assignee`)
       .set('Authorization', authHeader(outsider))
       .send({ assigneeId: member1.id })
+      .expect(403);
+  });
+
+  // 9. Activity history records all three transitions (ASSIGNED, REASSIGNED, UNASSIGNED) and enforces read access
+  it('records assignment transitions in activity history with proper access control', async () => {
+    // 1. Initial assignment: Unassigned -> member1 (ASSIGNED)
+    await request(app.getHttpServer())
+      .patch(`/tasks/${taskId}/assignee`)
+      .set('Authorization', authHeader(manager))
+      .send({ assigneeId: member1.id })
+      .expect(200);
+
+    // 2. Reassignment: member1 -> member2 (REASSIGNED)
+    await request(app.getHttpServer())
+      .patch(`/tasks/${taskId}/assignee`)
+      .set('Authorization', authHeader(manager))
+      .send({ assigneeId: member2.id })
+      .expect(200);
+
+    // 3. Unassignment: member2 -> null (UNASSIGNED)
+    await request(app.getHttpServer())
+      .patch(`/tasks/${taskId}/assignee`)
+      .set('Authorization', authHeader(manager))
+      .send({ assigneeId: null })
+      .expect(200);
+
+    // 4. Fetch activity timeline as project member -> 200 OK
+    const historyRes = await request(app.getHttpServer())
+      .get(`/tasks/${taskId}/activity`)
+      .set('Authorization', authHeader(member1))
+      .expect(200);
+
+    expect(historyRes.body.items).toHaveLength(3);
+
+    // Most recent is UNASSIGNED: member2 -> null
+    expect(historyRes.body.items[0]).toMatchObject({
+      type: 'TASK_ASSIGNEE_CHANGED',
+      actor: { id: manager.id, email: manager.email },
+      metadata: {
+        from: { id: member2.id, email: member2.email },
+        to: null,
+      },
+    });
+
+    // Middle is REASSIGNED: member1 -> member2
+    expect(historyRes.body.items[1]).toMatchObject({
+      type: 'TASK_ASSIGNEE_CHANGED',
+      actor: { id: manager.id, email: manager.email },
+      metadata: {
+        from: { id: member1.id, email: member1.email },
+        to: { id: member2.id, email: member2.email },
+      },
+    });
+
+    // First is ASSIGNED: null -> member1
+    expect(historyRes.body.items[2]).toMatchObject({
+      type: 'TASK_ASSIGNEE_CHANGED',
+      actor: { id: manager.id, email: manager.email },
+      metadata: {
+        from: null,
+        to: { id: member1.id, email: member1.email },
+      },
+    });
+
+    // 5. Outsider tries to view activity history -> 403 Forbidden
+    await request(app.getHttpServer())
+      .get(`/tasks/${taskId}/activity`)
+      .set('Authorization', authHeader(outsider))
       .expect(403);
   });
 });

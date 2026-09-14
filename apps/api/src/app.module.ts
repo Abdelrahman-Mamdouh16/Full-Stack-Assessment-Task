@@ -11,6 +11,7 @@ import { OrganizationMembersModule } from './organization-members/organization-m
 import { OrganizationsModule } from './organizations/organizations.module';
 import { ProjectMembersModule } from './project-members/project-members.module';
 import { ProjectsModule } from './projects/projects.module';
+import { TaskActivityModule } from './task-activity/task-activity.module';
 import { TasksModule } from './tasks/tasks.module';
 import { UsersModule } from './users/users.module';
 
@@ -35,6 +36,7 @@ import { UsersModule } from './users/users.module';
     ProjectsModule,
     ProjectMembersModule,
     TasksModule,
+    TaskActivityModule,
     CommentsModule,
   ],
   providers: [

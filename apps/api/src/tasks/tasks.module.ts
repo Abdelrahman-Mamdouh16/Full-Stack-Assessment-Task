@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { Comment, CommentSchema } from '../comments/schemas/comment.schema';
 import { ProjectMembersModule } from '../project-members/project-members.module';
 import { ProjectsModule } from '../projects/projects.module';
+import { TaskActivityModule } from '../task-activity/task-activity.module';
 import { UsersModule } from '../users/users.module';
 import { ProjectCounter, ProjectCounterSchema } from './schemas/project-counter.schema';
 import { Task, TaskSchema } from './schemas/task.schema';
@@ -18,6 +19,7 @@ import { TasksService } from './tasks.service';
     ]),
     ProjectsModule,
     ProjectMembersModule,
+    TaskActivityModule,
     UsersModule,
   ],
   controllers: [TasksController],

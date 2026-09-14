@@ -60,6 +60,23 @@ export interface TaskDetail extends TaskSummary {
   project: Pick<ProjectSummary, 'id' | 'name' | 'key'>;
 }
 
+export type TaskActivityType = 'TASK_ASSIGNEE_CHANGED';
+
+export interface TaskActivityMetadata {
+  from: UserSummary | null;
+  to: UserSummary | null;
+}
+
+export interface TaskActivityEntry {
+  id: string;
+  taskId: string;
+  projectId: string;
+  type: TaskActivityType;
+  actor: UserSummary;
+  metadata: TaskActivityMetadata;
+  createdAt: string;
+}
+
 export interface CommentEntry {
   id: string;
   taskId: string;

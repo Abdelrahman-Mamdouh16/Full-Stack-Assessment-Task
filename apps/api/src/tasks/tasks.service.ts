@@ -12,6 +12,7 @@ import { Comment, type CommentDocument } from '../comments/schemas/comment.schem
 import { ProjectMembersService } from '../project-members/project-members.service';
 import { canManage, ProjectAccessService } from '../projects/project-access.service';
 import { Project, type ProjectDocument } from '../projects/schemas/project.schema';
+import { TaskActivityService } from '../task-activity/task-activity.service';
 import { UsersService } from '../users/users.service';
 import type { AssignTaskDto } from './dto/assign-task.dto';
 import type { CreateTaskDto } from './dto/create-task.dto';
@@ -31,6 +32,7 @@ export class TasksService {
     private readonly projectCounterModel: Model<ProjectCounterDocument>,
     private readonly projectAccessService: ProjectAccessService,
     private readonly projectMembersService: ProjectMembersService,
+    private readonly taskActivityService: TaskActivityService,
     private readonly usersService: UsersService,
   ) {}
 
@@ -42,9 +44,11 @@ export class TasksService {
     await this.projectAccessService.assertCanView(projectId, userId);
 
     const filter: FilterQuery<TaskDocument> = { projectId };
+
     if (query.status) {
       filter.status = query.status;
     }
+
     if (query.priority) {
       filter.priority = query.priority;
     }
@@ -74,6 +78,7 @@ export class TasksService {
       { $inc: { seq: 1 } },
       { new: true, upsert: true, setDefaultsOnInsert: true },
     );
+
     const number = counter.seq;
 
     const task = await this.taskModel.create({
@@ -106,6 +111,7 @@ export class TasksService {
     const access = await this.projectAccessService.assertCanView(task.projectId, userId);
 
     const isCreator = task.createdBy.equals(userId);
+
     if (!canManage(access) && !isCreator) {
       throw new ForbiddenException('You do not have permission to edit this task');
     }
@@ -113,12 +119,15 @@ export class TasksService {
     if (dto.title !== undefined) {
       task.title = dto.title;
     }
+
     if (dto.description !== undefined) {
       task.description = dto.description;
     }
+
     if (dto.status !== undefined) {
       task.status = dto.status;
     }
+
     if (dto.priority !== undefined) {
       task.priority = dto.priority;
     }
@@ -150,6 +159,8 @@ export class TasksService {
     const task = await this.findTaskOrFail(taskId);
     const access = await this.projectAccessService.assertCanView(task.projectId, actorId);
 
+    const previousAssigneeId = task.assignee ?? null;
+
     // Case 1: Unassignment
     if (dto.assigneeId === null) {
       const isManager = canManage(access);
@@ -159,18 +170,40 @@ export class TasksService {
         throw new ForbiddenException('You do not have permission to unassign this task');
       }
 
+      // No state change if the task is already unassigned.
+      if (previousAssigneeId === null) {
+        return this.toDetail(task, access.project);
+      }
+
       task.assignee = null;
       await task.save();
+
+      await this.taskActivityService.recordTransition({
+        taskId: task._id,
+        projectId: task.projectId,
+        actorId,
+        type: 'TASK_ASSIGNEE_CHANGED',
+        fromUserId: previousAssigneeId,
+        toUserId: null,
+      });
+
       return this.toDetail(task, access.project);
     }
 
     if (dto.assigneeId === undefined) {
-      throw new BadRequestException('assigneeId must be provided as a valid MongoDB ObjectId or null');
+      throw new BadRequestException(
+        'assigneeId must be provided as a valid MongoDB ObjectId or null',
+      );
     }
 
     const assigneeObjectId = new Types.ObjectId(dto.assigneeId);
 
-    // Case 2: Assignment - verify assignee exists and is a member of the project
+    // No state change if the task is already assigned to this user.
+    if (previousAssigneeId?.equals(assigneeObjectId)) {
+      return this.toDetail(task, access.project);
+    }
+
+    // The target user must exist and already be a member of this project.
     const [assigneeUser, membership] = await Promise.all([
       this.usersService.findById(assigneeObjectId),
       this.projectMembersService.findExisting(task.projectId, assigneeObjectId),
@@ -184,9 +217,8 @@ export class TasksService {
       throw new BadRequestException('Assignee must be a member of this project');
     }
 
-    // Role-based permission check:
-    // OWNER / ADMIN / PROJECT_MANAGER can assign any member of the project.
-    // Regular MEMBER can only assign themselves.
+    // OWNER / ADMIN / PROJECT_MANAGER can assign any project member.
+    // Regular MEMBER can only assign the task to themselves.
     const isManager = canManage(access);
     const isSelfAssignment = assigneeObjectId.equals(actorId);
 
@@ -197,11 +229,21 @@ export class TasksService {
     task.assignee = assigneeObjectId;
     await task.save();
 
+    await this.taskActivityService.recordTransition({
+      taskId: task._id,
+      projectId: task.projectId,
+      actorId,
+      type: 'TASK_ASSIGNEE_CHANGED',
+      fromUserId: previousAssigneeId,
+      toUserId: assigneeObjectId,
+    });
+
     return this.toDetail(task, access.project);
   }
 
   async remove(taskId: Types.ObjectId, userId: Types.ObjectId): Promise<void> {
     const task = await this.findTaskOrFail(taskId);
+
     await this.projectAccessService.assertCanManage(task.projectId, userId);
 
     await Promise.all([this.commentModel.deleteMany({ taskId: task._id }), task.deleteOne()]);
@@ -209,9 +251,11 @@ export class TasksService {
 
   async findTaskOrFail(taskId: Types.ObjectId): Promise<TaskDocument> {
     const task = await this.taskModel.findById(taskId).exec();
+
     if (!task) {
       throw new NotFoundException('Task not found');
     }
+
     return task;
   }
 
@@ -221,6 +265,7 @@ export class TasksService {
     }
 
     const creatorIds = tasks.map((task) => task.createdBy);
+
     const assigneeIds = tasks
       .map((task) => task.assignee)
       .filter((id): id is Types.ObjectId => Boolean(id));
@@ -246,9 +291,7 @@ export class TasksService {
     const commentCounts = new Map(commentRows.map((row) => [row._id.toString(), row.count]));
 
     return tasks.map((task) => {
-      const assigneeUser = task.assignee
-        ? usersById.get(task.assignee.toString())
-        : null;
+      const assigneeUser = task.assignee ? usersById.get(task.assignee.toString()) : null;
 
       return {
         id: task._id.toString(),
@@ -269,6 +312,7 @@ export class TasksService {
 
   private async toDetail(task: TaskDocument, project?: ProjectDocument): Promise<TaskDetail> {
     const [summary] = await this.toSummaries([task]);
+
     const resolvedProject = project ?? (await this.projectModel.findById(task.projectId).exec());
 
     if (!resolvedProject) {
