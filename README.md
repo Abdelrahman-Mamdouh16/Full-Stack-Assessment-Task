@@ -248,6 +248,17 @@ POST   /tasks/:taskId/comments
 GET    /tasks/:taskId/activity
 ```
 
+`PATCH /tasks/:taskId/assignee` accepts a JSON body with a project-member
+`assigneeId`, or `null` to unassign the task:
+
+```json
+{ "assigneeId": "<project-member-user-id>" }
+```
+
+```json
+{ "assigneeId": null }
+```
+
 `GET /tasks/:taskId/activity` accepts optional `page` and `pageSize` query
 parameters and returns a paginated response:
 

@@ -17,11 +17,14 @@ Although the endpoint required authentication (`JwtAuthGuard`), it lacked projec
 ## Vulnerability Details
 
 ### Location
+
 - Controller: `apps/api/src/tasks/tasks.controller.ts` (`updateStatus` handler)
 - Service: `apps/api/src/tasks/tasks.service.ts` (`updateStatus` method)
 
 ### Previous Implementation
+
 In `tasks.controller.ts`:
+
 ```typescript
 @Patch('tasks/:taskId/status')
 updateStatus(
@@ -33,6 +36,7 @@ updateStatus(
 ```
 
 In `tasks.service.ts`:
+
 ```typescript
 async updateStatus(taskId: Types.ObjectId, dto: UpdateTaskStatusDto): Promise<TaskDetail> {
   const task = await this.findTaskOrFail(taskId);
@@ -45,6 +49,7 @@ async updateStatus(taskId: Types.ObjectId, dto: UpdateTaskStatusDto): Promise<Ta
 ```
 
 ### Flaw
+
 1. The caller's identity (`userId`) was not extracted or passed from the controller to the service.
 2. `this.projectAccessService.assertCanView(task.projectId, userId)` was never called.
 3. In contrast, `update()` and `findOne()` properly guarded task access using `ProjectAccessService`.
@@ -61,7 +66,9 @@ async updateStatus(taskId: Types.ObjectId, dto: UpdateTaskStatusDto): Promise<Ta
    - Passed `access.project` to `this.toDetail(task, access.project)` to optimize project resolution and maintain consistency.
 
 ### Fixed Code
+
 In `tasks.controller.ts`:
+
 ```typescript
 @Patch('tasks/:taskId/status')
 updateStatus(
@@ -78,6 +85,7 @@ updateStatus(
 ```
 
 In `tasks.service.ts`:
+
 ```typescript
 async updateStatus(
   taskId: Types.ObjectId,
@@ -99,6 +107,7 @@ async updateStatus(
 ## Verification & Regression Testing
 
 Added a regression test in `apps/api/test/tasks.e2e.spec.ts`:
+
 ```typescript
 it('refuses to update task status for someone outside the project', async () => {
   const createResponse = await request(app.getHttpServer())

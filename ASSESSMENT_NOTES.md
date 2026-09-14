@@ -142,6 +142,15 @@ The previously identified status-authorization vulnerability and task-numbering 
 
 One remaining scalability limitation is that `GET /projects/:projectId/members` currently returns all project members without pagination. This is outside the assessment's required assignment flow and is documented as future work rather than an unresolved security or correctness issue.
 
+### Observed Risks
+
+The following risks remain outside the completed assessment requirements:
+
+- **Authentication abuse:** Login and registration endpoints currently have no rate limiting, leaving them more exposed to brute-force or automated abuse.
+- **Authorization regression risk:** Authorization is centralized in `ProjectAccessService`, but future endpoints must consistently call the appropriate access checks. A missed check could reintroduce the type of vulnerability identified in the original status-update issue.
+- **Unbounded project-member queries:** Project member listing currently returns the full membership set, which can become expensive for projects with very large member counts.
+- **Offset pagination at scale:** Activity history currently uses page-based pagination. Deep pages may become less efficient as activity volume grows, which is why cursor-based pagination is identified as future work.
+
 ### Historical issue 1 — Missing Authorization on `PATCH /tasks/:taskId/status` (fixed)
 
 **What it was:** `TasksService.updateStatus()` previously accepted only `taskId + dto` and did not call `assertCanView()`.

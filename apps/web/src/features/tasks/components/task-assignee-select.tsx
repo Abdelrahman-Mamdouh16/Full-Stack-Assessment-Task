@@ -170,7 +170,6 @@ export function TaskAssigneeSelect({ taskId, projectId, assignee }: TaskAssignee
           {' '}
           <SelectValue placeholder="Unassigned" />{' '}
         </SelectTrigger>
-        ```
         <SelectContent>
           {canUnassign ? (
             <SelectItem value={UNASSIGNED_VALUE}>

@@ -56,7 +56,10 @@ describe('Task Numbering Concurrency', () => {
 
   it('generates strictly unique sequential task numbers and keys under concurrent creation', async () => {
     const TASK_COUNT = 10;
-    const taskTitles = Array.from({ length: TASK_COUNT }, (_, index) => `Concurrent Task ${index + 1}`);
+    const taskTitles = Array.from(
+      { length: TASK_COUNT },
+      (_, index) => `Concurrent Task ${index + 1}`,
+    );
 
     // Launch concurrent task creation requests simultaneously
     const responses = await Promise.all(
