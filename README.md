@@ -120,15 +120,16 @@ pnpm dev
 
 ## Commands
 
-| Command          | Description                                |
-| ---------------- | ------------------------------------------ |
-| `pnpm dev`       | Run the API and web app in watch mode      |
-| `pnpm build`     | Build every package and app                |
-| `pnpm lint`      | ESLint across the workspace                |
-| `pnpm typecheck` | TypeScript project-wide, no emit           |
-| `pnpm test`      | API test suite (uses an in-memory MongoDB) |
-| `pnpm seed`      | Reset and reload development data          |
-| `pnpm format`    | Prettier write                             |
+| Command             | Description                                |
+| ------------------- | ------------------------------------------ |
+| `pnpm dev`          | Run the API and web app in watch mode      |
+| `pnpm build`        | Build every package and app                |
+| `pnpm lint`         | ESLint across the workspace                |
+| `pnpm typecheck`    | TypeScript project-wide, no emit           |
+| `pnpm test`         | API test suite (uses an in-memory MongoDB) |
+| `pnpm seed`         | Reset and reload development data          |
+| `pnpm format`       | Prettier write                             |
+| `pnpm format:check` | Prettier check without modifying files     |
 
 `pnpm test` does not need a running MongoDB — it starts a throwaway in-memory
 server for the duration of the run. The first run downloads a MongoDB binary
@@ -239,11 +240,28 @@ POST   /projects/:projectId/tasks
 GET    /tasks/:taskId
 PATCH  /tasks/:taskId
 PATCH  /tasks/:taskId/status
+PATCH  /tasks/:taskId/assignee
 DELETE /tasks/:taskId
 
 GET    /tasks/:taskId/comments
 POST   /tasks/:taskId/comments
+GET    /tasks/:taskId/activity
 ```
+
+`GET /tasks/:taskId/activity` accepts optional `page` and `pageSize` query
+parameters and returns a paginated response:
+
+```json
+{
+  "items": [],
+  "total": 0,
+  "page": 1,
+  "pageSize": 20
+}
+```
+
+Activity items are returned newest first and record assignment transitions as
+`TASK_ASSIGNEE_CHANGED` with `metadata.from` and `metadata.to` user summaries.
 
 Errors share one shape:
 

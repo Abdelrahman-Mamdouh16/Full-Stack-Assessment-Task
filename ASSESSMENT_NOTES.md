@@ -1,5 +1,17 @@
 ﻿# Assessment Notes — ProjectFlow
 
+## Assessment Status
+
+The assessment implementation is complete for the currently defined scope:
+
+- Production bug fix: task status updates now require project access.
+- Atomic task numbering: per-project counters prevent duplicate task numbers under concurrent creation.
+- Task assignment: role-based assignment, project-membership validation, self-assignment, and unassignment are implemented.
+- Activity history: assignment transitions are stored as `TASK_ASSIGNEE_CHANGED` with `{ from, to }` metadata and exposed through a paginated API.
+- Frontend assignment/activity UI: the task detail view supports assignment, unassignment, loading/error states, optimistic rollback, and newest-first activity history.
+
+These requirements are complete. The remaining limitations are documented as scaling or future-work considerations below, not as unresolved assessment requirements.
+
 ## 1. System Structure and Major Modules
 
 ProjectFlow is a **pnpm monorepo** managed by Turborepo, composed of three packages:
@@ -113,7 +125,7 @@ Organization ──────────── OrganizationMember ─── U
                               └── Task ─────── Comment
                                     │
                                     └── assignee (nullable ref → User, must be ProjectMember)
-                                    └── TaskActivity (to be added)
+                                    └── TaskActivity (assignment transition history)
 ```
 
 Key design choices:
@@ -124,39 +136,45 @@ Key design choices:
 
 ---
 
-## 6. Observed Risks and Weaknesses
+## 6. Completed Fixes and Current Limitations
 
-### Risk 1 — Missing Authorization on `PATCH /tasks/:taskId/status` ⚠️ HIGH
+The previously identified status-authorization vulnerability and task-numbering race condition are fixed. `PATCH /tasks/:taskId/status` now checks project access, and task creation uses an atomic per-project counter. Assignment and activity-history requirements are also implemented and covered by backend e2e tests.
 
-**What:** `TasksService.updateStatus()` accepts only `taskId + dto`. There is no `userId` parameter and no call to `assertCanView()` or any access check. The controller handler for `PATCH /tasks/:taskId/status` similarly does not extract `@CurrentUser`.
+One remaining scalability limitation is that `GET /projects/:projectId/members` currently returns all project members without pagination. This is outside the assessment's required assignment flow and is documented as future work rather than an unresolved security or correctness issue.
 
-**Why it's a problem:** Any authenticated user who knows a valid `taskId` can change the task's status — even if they have no organization or project membership at all. This is a **confirmed security vulnerability** that violates the access control model of the entire application.
+### Historical issue 1 — Missing Authorization on `PATCH /tasks/:taskId/status` (fixed)
 
-**Fix now or later?** **Fix now, immediately.** This is a security regression, not a polish item. It undermines the trust in the entire authorization layer.
+**What it was:** `TasksService.updateStatus()` previously accepted only `taskId + dto` and did not call `assertCanView()`.
 
----
+**Why it mattered:** Any authenticated user who knew a valid task id could change its status without project access.
 
-### Risk 2 — Race Condition in Task Numbering ⚠️ MEDIUM
-
-**What:** Task creation uses `countDocuments({ projectId }) + 1` to determine the next task number. Two concurrent requests can both read the same count and produce duplicate task numbers (e.g., two `ENG-101`s).
-
-**Why it's a problem:** Duplicate keys violate the human-readable identifier guarantee. The `key` field (`ENG-1`, `ENG-2`) is the primary way users reference tasks (in comments, PR titles, etc.). Duplicates break communication and potentially data integrity if keys are used as lookup handles.
-
-**Fix now or later?** **Fix now.** The assessment explicitly calls this out as a known bug. The fix (atomic `findOneAndUpdate + $inc` counter) is small and contained with no architectural impact.
+**Resolution:** The controller now passes the authenticated user id and the service checks project access before saving. Regression coverage returns `403` for an outside user.
 
 ---
 
-### Risk 3 — No Pagination on Project Member Listing ⚠️ LOW
+### Historical issue 2 — Race Condition in Task Numbering (fixed)
+
+**What it was:** Task creation used `countDocuments({ projectId }) + 1`, allowing concurrent requests to select the same number.
+
+**Why it mattered:** Duplicate human-readable task keys break references and data integrity.
+
+**Resolution:** An atomic `findOneAndUpdate` plus `$inc` project counter now allocates sequential numbers. Concurrency e2e coverage verifies the behavior.
+
+---
+
+### Remaining scalability limitation — Project Member Listing
 
 **What:** `ProjectsService.findMembers()` fetches all project members with `findByProject()` — no pagination, no limit. For projects with many members, this is an unbounded query.
 
 **Why it's a problem:** At scale, projects with hundreds of members could produce slow queries and large JSON responses.
 
-**Fix now or later?** **Later.** Given the assessment's time constraints, this is a known limitation worth documenting. The fix is straightforward but adds surface area beyond the current assessment scope.
+**Priority:** Future work. This is not part of the completed assignment/activity requirements, but should be addressed before projects can contain very large member lists.
 
 ---
 
 ## Code Review
+
+The original submitted method is reviewed below against the implemented requirements. The recommendations describe the minimum changes needed; they do not require unrelated refactoring.
 
 ### Submitted Function
 
@@ -245,35 +263,36 @@ _Ask the engineer:_ Accept `assigneeId: string | null`, handle the `null` case e
 
 ---
 
-## Scaling the Activity System (5,000 → 500,000 Users)
+## Scaling Discussion (5,000 → 500,000 Users)
 
 ### Current State
 
-The activity system will be a simple `task_activity` MongoDB collection. At 5,000 users, this is perfectly adequate.
+The current `task_activities` MongoDB collection is adequate at approximately 5,000 users. Scaling should follow measured workload and query behavior rather than introduce distributed infrastructure by default.
 
 ### What Changes and When
 
-**Phase 1 — Current scale (~5,000 users)**
+**Around 5,000 users**
 
-The simplest design works. Index `{ task: 1, createdAt: -1 }` covers the primary read pattern (paginated activity feed per task). Offset pagination is acceptable.
+Keep the current REST and MongoDB design. The existing `{ taskId: 1, createdAt: -1 }` index supports the newest-first activity query. The task and membership indexes should continue to match actual filters and sort orders. Offset pagination is acceptable for short histories.
 
-**Phase 2 — Growth to ~50,000 users**
+**As usage grows toward 50,000 users**
 
-- **Switch to cursor-based pagination.** Offset pagination (`SKIP n`) forces the database to scan and discard preceding documents on every request — O(n) cost that grows as pages deepen. Cursor pagination (using `_id` or `createdAt` as a cursor) delivers stable O(log n) reads via the index regardless of depth. This change should happen before the dataset is large enough for the offset cost to be noticeable.
+- **Query patterns and indexes:** use slow-query data, narrow projections, and add compound indexes only for measured filters and sort orders.
+- **Cursor-based pagination:** replace deep offset pagination with a cursor based on `createdAt` plus `_id` as a stable tiebreaker. `SKIP` becomes increasingly expensive as pages deepen.
 
-- **Compound index** `{ task: 1, createdAt: -1, _id: -1 }` added to support cursor-based queries with a stable tiebreaker.
+- **Compound cursor index:** add `{ taskId: 1, createdAt: -1, _id: -1 }` when cursor pagination is introduced.
 
-**Phase 3 — Growth to ~500,000 users**
+**Around 500,000 users**
 
 At this scale, activity becomes one of the largest collections. Several decisions become necessary:
 
 - **Data retention / archiving.** Records older than 90–180 days can be archived to cold storage (a separate MongoDB collection or a cheaper tier). This keeps the hot collection bounded and indexes lean. Retention rules should be configurable per organization.
 
-- **Async activity writes.** If activity writes become a bottleneck, the task mutation can succeed immediately and the activity record can be created as a follow-up (via a change stream listener or a lightweight in-process job queue). This prevents a slow write to the activity collection from blocking a task update response. At 500,000 users, this is worth considering. At 5,000, it adds complexity without benefit.
+- **Async activity writes.** If activity writes measurably add latency or fall behind task writes, create history through a durable background mechanism with retry and monitoring. Do not add this complexity at 5,000 users without evidence.
 
 - **Real-time updates.** If activity timelines need to update live (without polling), WebSockets (NestJS Gateways) or Server-Sent Events are the appropriate additions. These are additive — the REST API continues to exist. Introducing them before there is a demonstrated UX demand is over-engineering.
 
-- **Observability.** At this scale, slow query logs (MongoDB Atlas Performance Advisor or equivalent) and application-level tracing (OpenTelemetry spans around `findByTask()`) are needed to detect regressions before they become incidents.
+- **Observability and caching.** Track request latency, MongoDB slow queries, error rates, activity write lag, and task-to-activity traces. Add caching only for demonstrated hot reads with deliberate invalidation.
 
 ### What Should NOT Change Unless a Concrete Problem Is Measured
 
