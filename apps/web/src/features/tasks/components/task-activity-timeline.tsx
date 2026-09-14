@@ -44,7 +44,7 @@ export function TaskActivityTimeline({ taskId }: TaskActivityTimelineProps) {
           description="Assignment changes will appear here."
         />
       ) : (
-        <ol className="divide-y divide-border border-y border-border">
+        <ol className="divide-y divide-border border-y border-b-0 border-border">
           {activity.data.items.map((entry) => (
             <li key={entry.id} className="flex gap-3 py-3">
               <Avatar user={entry.actor} size="md" />

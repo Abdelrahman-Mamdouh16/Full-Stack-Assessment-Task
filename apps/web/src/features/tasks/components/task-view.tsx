@@ -70,8 +70,8 @@ export function TaskView({ projectId, taskId }: TaskViewProps) {
             )}
           </section>
 
-          <TaskActivityTimeline taskId={taskId} />
           <CommentList taskId={taskId} />
+          <TaskActivityTimeline taskId={taskId} />
         </div>
 
         <aside className="space-y-5 lg:border-l lg:border-border lg:pl-6">
