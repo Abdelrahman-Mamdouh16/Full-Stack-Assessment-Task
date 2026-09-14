@@ -11,6 +11,7 @@ import { OrganizationMemberSchema } from '../organization-members/schemas/organi
 import { OrganizationSchema } from '../organizations/schemas/organization.schema';
 import { ProjectMemberSchema } from '../project-members/schemas/project-member.schema';
 import { ProjectSchema } from '../projects/schemas/project.schema';
+import { ProjectCounterSchema } from '../tasks/schemas/project-counter.schema';
 import { TaskSchema } from '../tasks/schemas/task.schema';
 import { CommentSchema } from '../comments/schemas/comment.schema';
 import { UserSchema } from '../users/schemas/user.schema';
@@ -26,6 +27,7 @@ const Organization = mongoose.model('Organization', OrganizationSchema);
 const OrganizationMember = mongoose.model('OrganizationMember', OrganizationMemberSchema);
 const Project = mongoose.model('Project', ProjectSchema);
 const ProjectMember = mongoose.model('ProjectMember', ProjectMemberSchema);
+const ProjectCounter = mongoose.model('ProjectCounter', ProjectCounterSchema);
 const Task = mongoose.model('Task', TaskSchema);
 const Comment = mongoose.model('Comment', CommentSchema);
 
@@ -50,6 +52,7 @@ async function seed(): Promise<void> {
   await Promise.all([
     Comment.deleteMany({}),
     Task.deleteMany({}),
+    ProjectCounter.deleteMany({}),
     ProjectMember.deleteMany({}),
     Project.deleteMany({}),
     OrganizationMember.deleteMany({}),
@@ -216,6 +219,15 @@ async function seed(): Promise<void> {
   }));
 
   const tasks = await Task.insertMany([...engineeringTasks, ...portalTasks]);
+
+  const maxEngSeq = engineeringTasks.reduce((max, t) => Math.max(max, t.number), 0);
+  const maxWebSeq = portalTasks.reduce((max, t) => Math.max(max, t.number), 0);
+
+  await ProjectCounter.insertMany([
+    { projectId: internalPlatform._id, seq: maxEngSeq },
+    { projectId: customerPortal._id, seq: maxWebSeq },
+  ]);
+
   const taskIdByKey = new Map(tasks.map((task) => [task.key, task._id as Types.ObjectId]));
   const taskId = (key: string): Types.ObjectId => {
     const id = taskIdByKey.get(key);

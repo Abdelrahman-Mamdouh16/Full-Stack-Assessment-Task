@@ -11,6 +11,7 @@ import type { CreateTaskDto } from './dto/create-task.dto';
 import type { ListTasksQueryDto } from './dto/list-tasks.dto';
 import type { UpdateTaskDto } from './dto/update-task.dto';
 import type { UpdateTaskStatusDto } from './dto/update-task-status.dto';
+import { ProjectCounter, type ProjectCounterDocument } from './schemas/project-counter.schema';
 import { Task, type TaskDocument } from './schemas/task.schema';
 
 @Injectable()
@@ -19,6 +20,8 @@ export class TasksService {
     @InjectModel(Task.name) private readonly taskModel: Model<TaskDocument>,
     @InjectModel(Project.name) private readonly projectModel: Model<ProjectDocument>,
     @InjectModel(Comment.name) private readonly commentModel: Model<CommentDocument>,
+    @InjectModel(ProjectCounter.name)
+    private readonly projectCounterModel: Model<ProjectCounterDocument>,
     private readonly projectAccessService: ProjectAccessService,
     private readonly usersService: UsersService,
   ) {}
@@ -58,8 +61,12 @@ export class TasksService {
   ): Promise<TaskDetail> {
     const { project } = await this.projectAccessService.assertCanView(projectId, userId);
 
-    const taskCount = await this.taskModel.countDocuments({ projectId });
-    const number = taskCount + 1;
+    const counter = await this.projectCounterModel.findOneAndUpdate(
+      { projectId },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true, setDefaultsOnInsert: true },
+    );
+    const number = counter.seq;
 
     const task = await this.taskModel.create({
       projectId,
