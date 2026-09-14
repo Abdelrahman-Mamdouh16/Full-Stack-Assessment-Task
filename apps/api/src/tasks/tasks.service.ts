@@ -1,12 +1,19 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { type FilterQuery, Model, Types } from 'mongoose';
 import type { Paginated, TaskDetail, TaskSummary } from '@projectflow/shared';
 import { toUserSummary } from '../common/utils/serialize';
 import { Comment, type CommentDocument } from '../comments/schemas/comment.schema';
+import { ProjectMembersService } from '../project-members/project-members.service';
 import { canManage, ProjectAccessService } from '../projects/project-access.service';
 import { Project, type ProjectDocument } from '../projects/schemas/project.schema';
 import { UsersService } from '../users/users.service';
+import type { AssignTaskDto } from './dto/assign-task.dto';
 import type { CreateTaskDto } from './dto/create-task.dto';
 import type { ListTasksQueryDto } from './dto/list-tasks.dto';
 import type { UpdateTaskDto } from './dto/update-task.dto';
@@ -23,6 +30,7 @@ export class TasksService {
     @InjectModel(ProjectCounter.name)
     private readonly projectCounterModel: Model<ProjectCounterDocument>,
     private readonly projectAccessService: ProjectAccessService,
+    private readonly projectMembersService: ProjectMembersService,
     private readonly usersService: UsersService,
   ) {}
 
@@ -134,6 +142,64 @@ export class TasksService {
     return this.toDetail(task, access.project);
   }
 
+  async assignTask(
+    taskId: Types.ObjectId,
+    actorId: Types.ObjectId,
+    dto: AssignTaskDto,
+  ): Promise<TaskDetail> {
+    const task = await this.findTaskOrFail(taskId);
+    const access = await this.projectAccessService.assertCanView(task.projectId, actorId);
+
+    // Case 1: Unassignment
+    if (dto.assigneeId === null) {
+      const isManager = canManage(access);
+      const isCurrentAssignee = task.assignee?.equals(actorId) ?? false;
+
+      if (!isManager && !isCurrentAssignee) {
+        throw new ForbiddenException('You do not have permission to unassign this task');
+      }
+
+      task.assignee = null;
+      await task.save();
+      return this.toDetail(task, access.project);
+    }
+
+    if (dto.assigneeId === undefined) {
+      throw new BadRequestException('assigneeId must be provided as a valid MongoDB ObjectId or null');
+    }
+
+    const assigneeObjectId = new Types.ObjectId(dto.assigneeId);
+
+    // Case 2: Assignment - verify assignee exists and is a member of the project
+    const [assigneeUser, membership] = await Promise.all([
+      this.usersService.findById(assigneeObjectId),
+      this.projectMembersService.findExisting(task.projectId, assigneeObjectId),
+    ]);
+
+    if (!assigneeUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!membership) {
+      throw new BadRequestException('Assignee must be a member of this project');
+    }
+
+    // Role-based permission check:
+    // OWNER / ADMIN / PROJECT_MANAGER can assign any member of the project.
+    // Regular MEMBER can only assign themselves.
+    const isManager = canManage(access);
+    const isSelfAssignment = assigneeObjectId.equals(actorId);
+
+    if (!isManager && !isSelfAssignment) {
+      throw new ForbiddenException('Members can only assign tasks to themselves');
+    }
+
+    task.assignee = assigneeObjectId;
+    await task.save();
+
+    return this.toDetail(task, access.project);
+  }
+
   async remove(taskId: Types.ObjectId, userId: Types.ObjectId): Promise<void> {
     const task = await this.findTaskOrFail(taskId);
     await this.projectAccessService.assertCanManage(task.projectId, userId);
@@ -154,8 +220,17 @@ export class TasksService {
       return [];
     }
 
-    const [creators, commentRows] = await Promise.all([
-      this.usersService.findManyByIds(tasks.map((task) => task.createdBy)),
+    const creatorIds = tasks.map((task) => task.createdBy);
+    const assigneeIds = tasks
+      .map((task) => task.assignee)
+      .filter((id): id is Types.ObjectId => Boolean(id));
+
+    const userIdsToFetch = Array.from(
+      new Set([...creatorIds, ...assigneeIds].map((id) => id.toString())),
+    ).map((id) => new Types.ObjectId(id));
+
+    const [users, commentRows] = await Promise.all([
+      this.usersService.findManyByIds(userIdsToFetch),
       this.commentModel
         .aggregate<{
           _id: Types.ObjectId;
@@ -167,22 +242,29 @@ export class TasksService {
         .exec(),
     ]);
 
-    const creatorsById = new Map(creators.map((user) => [user._id.toString(), user]));
+    const usersById = new Map(users.map((user) => [user._id.toString(), user]));
     const commentCounts = new Map(commentRows.map((row) => [row._id.toString(), row.count]));
 
-    return tasks.map((task) => ({
-      id: task._id.toString(),
-      projectId: task.projectId.toString(),
-      number: task.number,
-      key: task.key,
-      title: task.title,
-      status: task.status,
-      priority: task.priority,
-      commentCount: commentCounts.get(task._id.toString()) ?? 0,
-      createdBy: toCreatorSummary(creatorsById.get(task.createdBy.toString())),
-      createdAt: task.createdAt.toISOString(),
-      updatedAt: task.updatedAt.toISOString(),
-    }));
+    return tasks.map((task) => {
+      const assigneeUser = task.assignee
+        ? usersById.get(task.assignee.toString())
+        : null;
+
+      return {
+        id: task._id.toString(),
+        projectId: task.projectId.toString(),
+        number: task.number,
+        key: task.key,
+        title: task.title,
+        status: task.status,
+        priority: task.priority,
+        assignee: assigneeUser ? toUserSummary(assigneeUser) : null,
+        commentCount: commentCounts.get(task._id.toString()) ?? 0,
+        createdBy: toCreatorSummary(usersById.get(task.createdBy.toString())),
+        createdAt: task.createdAt.toISOString(),
+        updatedAt: task.updatedAt.toISOString(),
+      };
+    });
   }
 
   private async toDetail(task: TaskDocument, project?: ProjectDocument): Promise<TaskDetail> {

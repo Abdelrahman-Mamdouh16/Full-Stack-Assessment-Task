@@ -33,6 +33,9 @@ export class Task {
   @Prop({ type: String, enum: TASK_PRIORITIES, required: true, default: TaskPriority.MEDIUM })
   priority: TaskPriority;
 
+  @Prop({ type: Types.ObjectId, ref: 'User', default: null, index: true })
+  assignee?: Types.ObjectId | null;
+
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   createdBy: Types.ObjectId;
 
@@ -45,3 +48,4 @@ export const TaskSchema = SchemaFactory.createForClass(Task);
 TaskSchema.index({ projectId: 1, status: 1 });
 TaskSchema.index({ projectId: 1, number: 1 });
 TaskSchema.index({ createdAt: -1 });
+TaskSchema.index({ projectId: 1, assignee: 1 });
