@@ -1,5 +1,6 @@
 import type {
   Paginated,
+  TaskActivityEntry,
   TaskDetail,
   TaskPriority,
   TaskStatus,
@@ -25,6 +26,19 @@ export function fetchProjectTasks(projectId: string): Promise<Paginated<TaskSumm
 
 export function fetchTask(taskId: string): Promise<TaskDetail> {
   return apiRequest<TaskDetail>(`/tasks/${taskId}`);
+}
+
+export function assignTask(taskId: string, assigneeId: string | null): Promise<TaskDetail> {
+  return apiRequest<TaskDetail>(`/tasks/${taskId}/assignee`, {
+    method: 'PATCH',
+    body: { assigneeId },
+  });
+}
+
+export function fetchTaskActivity(taskId: string): Promise<Paginated<TaskActivityEntry>> {
+  return apiRequest<Paginated<TaskActivityEntry>>(`/tasks/${taskId}/activity`, {
+    query: { page: 1, pageSize: 50 },
+  });
 }
 
 export function createTask(projectId: string, payload: CreateTaskPayload): Promise<TaskDetail> {
